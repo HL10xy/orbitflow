@@ -1,0 +1,392 @@
+/* ============= Dashboard Layout ============= */
+
+.dashboard {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px 24px;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.dashboard-header h1 {
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-icon {
+  font-size: 1.8rem;
+}
+
+.header-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.85rem;
+}
+
+.ws-indicator {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.ws-indicator.connected {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+}
+
+.ws-indicator.disconnected {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+.llm-info {
+  color: var(--text-secondary);
+}
+
+/* ============= Dashboard Grid ============= */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 24px;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ============= Task Creator ============= */
+
+.task-creator {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.complexity-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.complexity-option {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.complexity-option.selected {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.complexity-option input {
+  display: none;
+}
+
+.complexity-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.complexity-desc {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.btn-run {
+  padding: 12px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-run:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-run:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============= Agent Card ============= */
+
+.agent-cards {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.agent-card {
+  background: var(--bg-primary);
+  border-radius: 6px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.agent-card:last-child {
+  margin-bottom: 0;
+}
+
+.agent-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.agent-icon {
+  font-size: 1.2rem;
+}
+
+.agent-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.agent-status {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.agent-last-msg {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.agent-last-msg.dim {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* ============= Task Flow ============= */
+
+.task-flow {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.flow-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 20px 0;
+}
+
+.flow-node-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.flow-node {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 3px solid var(--border);
+  transition: all 0.3s;
+}
+
+.flow-node.working {
+  border-color: var(--warning);
+  background: rgba(245, 158, 11, 0.15);
+  animation: pulse 1.5s infinite;
+}
+
+.flow-node.done {
+  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.flow-node.failed {
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.flow-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.flow-node.working .flow-dot { background: var(--warning); }
+.flow-node.done .flow-dot { background: var(--success); }
+.flow-node.failed .flow-dot { background: var(--danger); }
+
+.flow-label {
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+
+.flow-connector {
+  width: 80px;
+  height: 2px;
+  background: var(--border);
+  margin: 0 8px;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+}
+
+/* ============= Agent Chat ============= */
+
+.agent-chat {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-log {
+  flex: 1;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.chat-empty {
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 40px 0;
+  text-align: center;
+}
+
+.chat-entry {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.chat-entry:last-child {
+  border-bottom: none;
+}
+
+.chat-time {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  margin-right: 8px;
+  font-family: monospace;
+}
+
+.chat-agent {
+  font-weight: 600;
+  color: var(--accent);
+  margin-right: 6px;
+  font-size: 0.8rem;
+}
+
+.chat-msg {
+  color: var(--text-secondary);
+}
+
+.chat-task_start .chat-msg,
+.chat-task_end .chat-msg {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.chat-agent_start .chat-agent {
+  color: var(--warning);
+}
+
+.chat-agent_end .chat-agent {
+  color: var(--success);
+}
+
+/* ============= Scrollbar ============= */
+
+.chat-log::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-log::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+  border-radius: 3px;
+}
+
+.chat-log::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* ============= Responsive ============= */
+
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
