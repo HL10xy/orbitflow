@@ -12,10 +12,8 @@ class Config:
     llm_model: str = os.getenv("LLM_MODEL", "mimo-v2.5-pro")
     max_context_tokens: int = 100_000
     agent_max_tokens: int = 16_384
-    memory_backend: str = "redis"  # "redis" or "inmemory"
+    memory_backend: str = "inmemory"  # "redis" or "inmemory"
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    ws_host: str = "0.0.0.0"
-    ws_port: int = 8765
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 

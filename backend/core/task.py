@@ -64,67 +64,40 @@ class Task:
         via LLM-driven planning for complex tasks.
         """
         if complexity == TaskComplexity.SIMPLE:
-            return [
+            subs = [
                 SubTask(description="Analyze requirements", assigned_agent="architect"),
-                SubTask(
-                    description=f"Implement: {description}",
-                    assigned_agent="coder",
-                    dependencies=["0"],
-                ),
+                SubTask(description=f"Implement: {description}", assigned_agent="coder"),
             ]
+            subs[1].dependencies = [subs[0].id]
+            return subs
         elif complexity == TaskComplexity.MODERATE:
-            return [
+            subs = [
                 SubTask(description="Analyze requirements and design solution", assigned_agent="architect"),
-                SubTask(
-                    description=f"Implement core logic: {description}",
-                    assigned_agent="coder",
-                    dependencies=["0"],
-                ),
-                SubTask(
-                    description="Review code for correctness and style",
-                    assigned_agent="reviewer",
-                    dependencies=["1"],
-                ),
-                SubTask(
-                    description="Generate and run tests",
-                    assigned_agent="tester",
-                    dependencies=["1"],
-                ),
+                SubTask(description=f"Implement core logic: {description}", assigned_agent="coder"),
+                SubTask(description="Review code for correctness and style", assigned_agent="reviewer"),
+                SubTask(description="Generate and run tests", assigned_agent="tester"),
             ]
+            subs[1].dependencies = [subs[0].id]
+            subs[2].dependencies = [subs[1].id]
+            subs[3].dependencies = [subs[1].id]
+            return subs
         else:  # COMPLEX or EPIC
-            return [
+            subs = [
                 SubTask(description="System design and architecture planning", assigned_agent="architect"),
-                SubTask(
-                    description="Implement module A (core logic)",
-                    assigned_agent="coder",
-                    dependencies=["0"],
-                ),
-                SubTask(
-                    description="Implement module B (integration layer)",
-                    assigned_agent="coder",
-                    dependencies=["0"],
-                ),
-                SubTask(
-                    description="Review module A",
-                    assigned_agent="reviewer",
-                    dependencies=["1"],
-                ),
-                SubTask(
-                    description="Review module B",
-                    assigned_agent="reviewer",
-                    dependencies=["2"],
-                ),
-                SubTask(
-                    description="Integration tests for A + B",
-                    assigned_agent="tester",
-                    dependencies=["3", "4"],
-                ),
-                SubTask(
-                    description="End-to-end validation and performance check",
-                    assigned_agent="tester",
-                    dependencies=["5"],
-                ),
+                SubTask(description="Implement module A (core logic)", assigned_agent="coder"),
+                SubTask(description="Implement module B (integration layer)", assigned_agent="coder"),
+                SubTask(description="Review module A", assigned_agent="reviewer"),
+                SubTask(description="Review module B", assigned_agent="reviewer"),
+                SubTask(description="Integration tests for A + B", assigned_agent="tester"),
+                SubTask(description="End-to-end validation and performance check", assigned_agent="tester"),
             ]
+            subs[1].dependencies = [subs[0].id]
+            subs[2].dependencies = [subs[0].id]
+            subs[3].dependencies = [subs[1].id]
+            subs[4].dependencies = [subs[2].id]
+            subs[5].dependencies = [subs[3].id, subs[4].id]
+            subs[6].dependencies = [subs[5].id]
+            return subs
 
     def to_dict(self) -> dict[str, Any]:
         return {

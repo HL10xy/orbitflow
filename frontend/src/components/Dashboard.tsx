@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { AgentCard } from "./AgentCard";
 import { TaskFlow } from "./TaskFlow";
@@ -10,18 +10,22 @@ export function Dashboard() {
   const { connected, events, connect, disconnect, runTask } = useWebSocket();
   const [status, setStatus] = useState<OrchestratorStatus | null>(null);
 
-  useEffect(() => {
-    connect();
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((d) => console.log("API:", d))
-      .catch(() => {});
+  const fetchStatus = useCallback(() => {
     fetch("/api/status")
       .then((r) => r.json())
       .then(setStatus)
       .catch(() => {});
-    return () => disconnect();
   }, []);
+
+  useEffect(() => {
+    connect();
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 15000);
+    return () => {
+      clearInterval(interval);
+      disconnect();
+    };
+  }, [connect, disconnect, fetchStatus]);
 
   const handleRun = (description: string, complexity: Complexity, title: string) => {
     runTask(description, complexity, title);

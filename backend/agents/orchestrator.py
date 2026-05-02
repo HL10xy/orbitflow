@@ -106,7 +106,18 @@ class Orchestrator:
             complexity=kwargs.get("complexity", TaskComplexity.MODERATE),
         )
         task.sub_tasks = Task.decompose_plan(description, task.complexity)
-        return await self.pipeline.execute(task, self.agents, self.memory)
+        self.current_task = task
+
+        events: list[PipelineEvent] = []
+
+        def collect(event: PipelineEvent):
+            events.append(event)
+
+        self.pipeline.on_event(collect)
+        try:
+            return await self.pipeline.execute(task, self.agents, self.memory)
+        finally:
+            self.pipeline._listeners.remove(collect)
 
     def get_status(self) -> dict[str, Any]:
         """Return current orchestrator status."""

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Callable
+from typing import Any, Callable
 
 from core.task import Task, TaskStatus, SubTask
 
@@ -31,17 +31,16 @@ class PipelineEvent:
 
 
 class Pipeline:
-    """Executes a Task through the multi-agent pipeline.
-
-    The pipeline resolves sub-task dependencies, invokes the appropriate
-    agents, and emits real-time events for the WebSocket layer.
-    """
+    """Executes a Task through the multi-agent pipeline with parallel DAG scheduling."""
 
     def __init__(self):
         self._listeners: list[Callable[[PipelineEvent], Any]] = []
 
     def on_event(self, listener: Callable[[PipelineEvent], Any]):
         self._listeners.append(listener)
+
+    def clear_listeners(self):
+        self._listeners.clear()
 
     async def _emit(self, event: PipelineEvent):
         for listener in self._listeners:
@@ -50,71 +49,97 @@ class Pipeline:
             else:
                 listener(event)
 
+    async def _run_subtask(
+        self,
+        sub_task: SubTask,
+        task: Task,
+        agent_registry: dict[str, Any],
+        memory: Any,
+        completed: dict[str, str],
+        events: dict[str, asyncio.Event],
+    ) -> None:
+        """Execute a single sub-task after its dependencies are met."""
+        # Wait for all dependencies
+        for dep_id in sub_task.dependencies:
+            if dep_id in events:
+                await events[dep_id].wait()
+
+        sub_task.status = TaskStatus.IN_PROGRESS
+        agent = agent_registry.get(sub_task.assigned_agent)
+        if agent is None:
+            sub_task.status = TaskStatus.FAILED
+            sub_task.result = f"No agent found for role: {sub_task.assigned_agent}"
+            events[sub_task.id].set()
+            return
+
+        await self._emit(PipelineEvent(
+            event_type="agent_start",
+            task_id=task.id,
+            sub_task_id=sub_task.id,
+            agent=sub_task.assigned_agent,
+            message=f"Agent '{sub_task.assigned_agent}' starting: {sub_task.description}",
+        ))
+
+        dep_results = {dep_id: completed[dep_id] for dep_id in sub_task.dependencies if dep_id in completed}
+
+        try:
+            result = await agent.run(sub_task, dep_results, memory)
+            sub_task.result = result
+            sub_task.status = TaskStatus.COMPLETED
+            completed[sub_task.id] = result
+
+            await self._emit(PipelineEvent(
+                event_type="agent_end",
+                task_id=task.id,
+                sub_task_id=sub_task.id,
+                agent=sub_task.assigned_agent,
+                message=f"Agent '{sub_task.assigned_agent}' completed",
+            ))
+        except Exception as exc:
+            sub_task.result = str(exc)
+            sub_task.status = TaskStatus.FAILED
+            await self._emit(PipelineEvent(
+                event_type="log",
+                task_id=task.id,
+                sub_task_id=sub_task.id,
+                agent=sub_task.assigned_agent,
+                message=f"Agent '{sub_task.assigned_agent}' failed: {exc}",
+            ))
+        finally:
+            events[sub_task.id].set()
+
     async def execute(
         self,
         task: Task,
         agent_registry: dict[str, Any],
         memory: Any,
-        event_stream: Callable[[PipelineEvent], Any] | None = None,
     ) -> Task:
-        """Run a task through the pipeline, respecting sub-task dependencies."""
+        """Run a task through the pipeline with parallel DAG scheduling.
+
+        Sub-tasks with no unmet dependencies run concurrently.
+        """
         task.status = TaskStatus.IN_PROGRESS
         await self._emit(PipelineEvent(
             event_type="task_start", task_id=task.id,
             message=f"Starting task: {task.title}",
         ))
 
-        completed: dict[str, str] = {}  # sub_task_id -> result
+        completed: dict[str, str] = {}
+        events: dict[str, asyncio.Event] = {st.id: asyncio.Event() for st in task.sub_tasks}
 
-        for sub_task in task.sub_tasks:
-            # Wait for dependencies
-            for dep_id in sub_task.dependencies:
-                while dep_id not in completed:
-                    await asyncio.sleep(0.1)
+        # Launch all sub-tasks concurrently; each waits for its own dependencies
+        coros = [
+            self._run_subtask(sub_task, task, agent_registry, memory, completed, events)
+            for sub_task in task.sub_tasks
+        ]
+        await asyncio.gather(*coros)
 
-            sub_task.status = TaskStatus.IN_PROGRESS
-            agent = agent_registry.get(sub_task.assigned_agent)
-            if agent is None:
-                sub_task.status = TaskStatus.FAILED
-                sub_task.result = f"No agent found for role: {sub_task.assigned_agent}"
-                continue
+        # Determine overall status
+        if any(st.status == TaskStatus.FAILED for st in task.sub_tasks):
+            task.status = TaskStatus.FAILED
+        else:
+            task.status = TaskStatus.COMPLETED
 
-            await self._emit(PipelineEvent(
-                event_type="agent_start",
-                task_id=task.id,
-                sub_task_id=sub_task.id,
-                agent=sub_task.assigned_agent,
-                message=f"Agent '{sub_task.assigned_agent}' starting: {sub_task.description}",
-            ))
-
-            # Gather dependency results as context
-            dep_results = {dep_id: completed[dep_id] for dep_id in sub_task.dependencies}
-
-            try:
-                result = await agent.run(sub_task, dep_results, memory)
-                sub_task.result = result
-                sub_task.status = TaskStatus.COMPLETED
-                completed[sub_task.id] = result
-
-                await self._emit(PipelineEvent(
-                    event_type="agent_end",
-                    task_id=task.id,
-                    sub_task_id=sub_task.id,
-                    agent=sub_task.assigned_agent,
-                    message=f"Agent '{sub_task.assigned_agent}' completed",
-                ))
-            except Exception as exc:
-                sub_task.result = str(exc)
-                sub_task.status = TaskStatus.FAILED
-                await self._emit(PipelineEvent(
-                    event_type="log",
-                    task_id=task.id,
-                    sub_task_id=sub_task.id,
-                    agent=sub_task.assigned_agent,
-                    message=f"Agent '{sub_task.assigned_agent}' failed: {exc}",
-                ))
-
-        task.status = TaskStatus.COMPLETED
         await self._emit(PipelineEvent(
             event_type="task_end", task_id=task.id,
             message=f"Task completed: {task.title}",

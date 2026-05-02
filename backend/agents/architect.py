@@ -12,6 +12,7 @@ class ArchitectAgent(BaseAgent):
 
     async def run(self, sub_task: SubTask, dependencies: dict[str, str], memory: Any) -> str:
         context = self._build_context(sub_task, dependencies, memory)
+        context += "\n\nFocus on: architecture decisions, component boundaries, data flow, and technology choices. Output structured markdown."
         messages = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": context},

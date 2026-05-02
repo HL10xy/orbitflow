@@ -12,6 +12,7 @@ class ReviewerAgent(BaseAgent):
 
     async def run(self, sub_task: SubTask, dependencies: dict[str, str], memory: Any) -> str:
         context = self._build_context(sub_task, dependencies, memory)
+        context += "\n\nProvide a structured review: Summary, Critical Issues, Suggestions, and an Approved (yes/no) verdict."
         messages = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": context},
