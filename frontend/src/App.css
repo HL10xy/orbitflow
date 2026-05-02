@@ -127,7 +127,14 @@
 }
 
 .complexity-option input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 
 .complexity-label {
@@ -322,6 +329,25 @@
   font-style: italic;
   padding: 40px 0;
   text-align: center;
+}
+
+.chat-show-more {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: var(--bg-primary);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: center;
+}
+
+.chat-show-more:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .chat-entry {

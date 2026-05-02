@@ -4,6 +4,7 @@ import type { Complexity } from "../types";
 interface TaskCreatorProps {
   onRun: (description: string, complexity: Complexity, title: string) => void;
   disabled: boolean;
+  isRunning: boolean;
 }
 
 const COMPLEXITY_OPTIONS: { value: Complexity; label: string; desc: string }[] = [
@@ -13,7 +14,7 @@ const COMPLEXITY_OPTIONS: { value: Complexity; label: string; desc: string }[] =
   { value: "epic", label: "Epic", desc: "Full pipeline, parallel sub-tasks" },
 ];
 
-export function TaskCreator({ onRun, disabled }: TaskCreatorProps) {
+export function TaskCreator({ onRun, disabled, isRunning }: TaskCreatorProps) {
   const [description, setDescription] = useState("");
   const [title, setTitle] = useState("");
   const [complexity, setComplexity] = useState<Complexity>("moderate");
@@ -22,7 +23,12 @@ export function TaskCreator({ onRun, disabled }: TaskCreatorProps) {
     e.preventDefault();
     if (!description.trim()) return;
     onRun(description.trim(), complexity, title.trim());
+    setDescription("");
+    setTitle("");
+    setComplexity("moderate");
   };
+
+  const buttonText = isRunning ? "Running..." : disabled ? "Disconnected" : "Run Pipeline";
 
   return (
     <form className="task-creator" onSubmit={handleSubmit}>
@@ -40,12 +46,15 @@ export function TaskCreator({ onRun, disabled }: TaskCreatorProps) {
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         rows={4}
+        maxLength={10000}
       />
-      <div className="complexity-selector">
+      <div className="complexity-selector" role="radiogroup" aria-label="Task complexity">
         {COMPLEXITY_OPTIONS.map((opt) => (
           <label
             key={opt.value}
             className={`complexity-option ${complexity === opt.value ? "selected" : ""}`}
+            role="radio"
+            aria-checked={complexity === opt.value}
           >
             <input
               type="radio"
@@ -59,8 +68,8 @@ export function TaskCreator({ onRun, disabled }: TaskCreatorProps) {
           </label>
         ))}
       </div>
-      <button type="submit" className="btn-run" disabled={disabled || !description.trim()}>
-        {disabled ? "Running..." : "Run Pipeline"}
+      <button type="submit" className="btn-run" disabled={isRunning || disabled || !description.trim()}>
+        {buttonText}
       </button>
     </form>
   );

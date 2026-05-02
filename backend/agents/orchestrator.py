@@ -40,6 +40,10 @@ class Orchestrator:
         self.memory = SharedMemory()
         self.pipeline = Pipeline()
         self.current_task: Task | None = None
+        self._running = False
+
+    async def close(self):
+        await self.llm.close()
 
     async def run(
         self,
@@ -62,6 +66,10 @@ class Orchestrator:
         Yields:
             PipelineEvent objects for real-time monitoring.
         """
+        if self._running:
+            raise RuntimeError("Orchestrator is already running a task")
+        self._running = True
+
         task = Task(
             title=title or description[:80],
             description=description,
@@ -71,7 +79,6 @@ class Orchestrator:
         task.sub_tasks = Task.decompose_plan(description, complexity)
         self.current_task = task
 
-        # Build event queue for streaming
         event_queue: asyncio.Queue[PipelineEvent | None] = asyncio.Queue()
 
         async def collect(event: PipelineEvent):
@@ -79,27 +86,39 @@ class Orchestrator:
 
         self.pipeline.on_event(collect)
 
-        # Run pipeline in background
         pipeline_task = asyncio.create_task(
             self.pipeline.execute(task, self.agents, self.memory)
         )
 
-        # Stream events as they arrive
-        while True:
-            event = await event_queue.get()
-            if event is None:
-                break
-            yield event
-            if event.event_type == "task_end":
-                # Pipeline is done, signal completion
+        async def wait_for_pipeline():
+            try:
+                await pipeline_task
+            finally:
                 await event_queue.put(None)
-                break
 
-        await pipeline_task
-        self.current_task = task
+        sentinel_task = asyncio.create_task(wait_for_pipeline())
+
+        try:
+            while True:
+                event = await event_queue.get()
+                if event is None:
+                    break
+                yield event
+                if event.event_type == "task_end":
+                    break
+            await pipeline_task
+            self.current_task = task
+        finally:
+            self.pipeline.remove_listener(collect)
+            sentinel_task.cancel()
+            self._running = False
 
     async def run_sync(self, description: str, **kwargs) -> Task:
         """Run a task and return the completed Task (non-streaming)."""
+        if self._running:
+            raise RuntimeError("Orchestrator is already running a task")
+        self._running = True
+
         task = Task(
             title=kwargs.get("title", description[:80]),
             description=description,
@@ -108,16 +127,17 @@ class Orchestrator:
         task.sub_tasks = Task.decompose_plan(description, task.complexity)
         self.current_task = task
 
-        events: list[PipelineEvent] = []
+        events_list: list[PipelineEvent] = []
 
         def collect(event: PipelineEvent):
-            events.append(event)
+            events_list.append(event)
 
         self.pipeline.on_event(collect)
         try:
             return await self.pipeline.execute(task, self.agents, self.memory)
         finally:
-            self.pipeline._listeners.remove(collect)
+            self.pipeline.remove_listener(collect)
+            self._running = False
 
     def get_status(self) -> dict[str, Any]:
         """Return current orchestrator status."""

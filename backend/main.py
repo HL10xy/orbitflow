@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import uvicorn
-from api.routes import app
 from config import default_config as cfg
 
 
@@ -10,7 +9,7 @@ def main():
         "api.routes:app",
         host=cfg.api_host,
         port=cfg.api_port,
-        reload=True,
+        reload=cfg.debug,
     )
 
 

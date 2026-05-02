@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from typing import Any, AsyncIterator
 
 import httpx
 
 from config import default_config as cfg
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient:
@@ -22,6 +26,17 @@ class LLMClient:
         self.api_key = api_key or cfg.llm_api_key
         self.model = model or cfg.llm_model
         self.max_tokens = max_tokens or cfg.agent_max_tokens
+
+        if self.api_key == "your-api-key-here":
+            logger.warning("LLM_API_KEY is set to the default placeholder; LLM calls will fail")
+
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(120, read=300),
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=5),
+        )
+
+    async def close(self):
+        await self._client.aclose()
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -51,6 +66,22 @@ class LLMClient:
             payload["stream"] = True
         return payload
 
+    async def _request_with_retry(self, make_request, max_retries: int = 3):
+        """Execute an HTTP request with exponential backoff on transient errors."""
+        for attempt in range(max_retries):
+            try:
+                return await make_request()
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in (429, 500, 502, 503) and attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                raise
+            except httpx.TransportError:
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                raise
+
     async def chat(
         self,
         messages: list[dict[str, str]],
@@ -60,14 +91,17 @@ class LLMClient:
     ) -> dict[str, Any]:
         """Send a chat completion request and return the parsed response."""
         payload = self._build_payload(messages, tools=tools, temperature=temperature)
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(
+
+        async def do_request():
+            resp = await self._client.post(
                 f"{self.base_url}/chat/completions",
                 headers=self._headers,
                 json=payload,
             )
             resp.raise_for_status()
             return resp.json()
+
+        return await self._request_with_retry(do_request)
 
     async def chat_stream(
         self,
@@ -77,20 +111,31 @@ class LLMClient:
     ) -> AsyncIterator[str]:
         """Stream chat completion tokens."""
         payload = self._build_payload(messages, stream=True, temperature=temperature)
-        async with httpx.AsyncClient(timeout=300) as client:
-            async with client.stream(
-                "POST",
-                f"{self.base_url}/chat/completions",
-                headers=self._headers,
-                json=payload,
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if line.startswith("data: ") and line != "data: [DONE]":
+
+        async def do_request():
+            resp = await self._client.send(
+                self._client.build_request(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    headers=self._headers,
+                    json=payload,
+                ),
+                stream=True,
+            )
+            resp.raise_for_status()
+            return resp
+
+        resp = await self._request_with_retry(do_request)
+        async with resp:
+            async for line in resp.aiter_lines():
+                if line.startswith("data: ") and line != "data: [DONE]":
+                    try:
                         chunk = json.loads(line[6:])
-                        delta = chunk.get("choices", [{}])[0].get("delta", {})
-                        if content := delta.get("content"):
-                            yield content
+                    except json.JSONDecodeError:
+                        continue
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    if content := delta.get("content"):
+                        yield content
 
     def extract_content(self, response: dict[str, Any]) -> str:
         """Extract text content from a chat completion response."""

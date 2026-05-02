@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,6 +16,14 @@ class Config:
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    debug: bool = os.getenv("ORBITFLOW_DEBUG", "false").lower() in ("true", "1", "yes")
+    api_key: str = os.getenv("ORBITFLOW_API_KEY", "")
+    cors_origins: list[str] = None
+
+    def __post_init__(self):
+        if self.cors_origins is None:
+            origins_str = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:8000")
+            self.cors_origins = [o.strip() for o in origins_str.split(",") if o.strip()]
 
 
 default_config = Config()

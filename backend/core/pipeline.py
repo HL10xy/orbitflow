@@ -42,6 +42,9 @@ class Pipeline:
     def clear_listeners(self):
         self._listeners.clear()
 
+    def remove_listener(self, listener: Callable[[PipelineEvent], Any]):
+        self._listeners = [l for l in self._listeners if l is not listener]
+
     async def _emit(self, event: PipelineEvent):
         for listener in self._listeners:
             if asyncio.iscoroutinefunction(listener):
@@ -56,6 +59,7 @@ class Pipeline:
         agent_registry: dict[str, Any],
         memory: Any,
         completed: dict[str, str],
+        failed: set[str],
         events: dict[str, asyncio.Event],
     ) -> None:
         """Execute a single sub-task after its dependencies are met."""
@@ -64,11 +68,28 @@ class Pipeline:
             if dep_id in events:
                 await events[dep_id].wait()
 
+        # Skip if any dependency failed
+        failed_deps = [dep_id for dep_id in sub_task.dependencies if dep_id in failed]
+        if failed_deps:
+            sub_task.status = TaskStatus.FAILED
+            sub_task.result = f"Skipped: dependency {failed_deps[0]} failed"
+            failed.add(sub_task.id)
+            await self._emit(PipelineEvent(
+                event_type="log",
+                task_id=task.id,
+                sub_task_id=sub_task.id,
+                agent=sub_task.assigned_agent,
+                message=f"Skipping '{sub_task.assigned_agent}': dependency failed",
+            ))
+            events[sub_task.id].set()
+            return
+
         sub_task.status = TaskStatus.IN_PROGRESS
         agent = agent_registry.get(sub_task.assigned_agent)
         if agent is None:
             sub_task.status = TaskStatus.FAILED
             sub_task.result = f"No agent found for role: {sub_task.assigned_agent}"
+            failed.add(sub_task.id)
             events[sub_task.id].set()
             return
 
@@ -98,6 +119,7 @@ class Pipeline:
         except Exception as exc:
             sub_task.result = str(exc)
             sub_task.status = TaskStatus.FAILED
+            failed.add(sub_task.id)
             await self._emit(PipelineEvent(
                 event_type="log",
                 task_id=task.id,
@@ -117,6 +139,7 @@ class Pipeline:
         """Run a task through the pipeline with parallel DAG scheduling.
 
         Sub-tasks with no unmet dependencies run concurrently.
+        Failed sub-tasks cause their dependents to be skipped.
         """
         task.status = TaskStatus.IN_PROGRESS
         await self._emit(PipelineEvent(
@@ -125,16 +148,15 @@ class Pipeline:
         ))
 
         completed: dict[str, str] = {}
+        failed: set[str] = set()
         events: dict[str, asyncio.Event] = {st.id: asyncio.Event() for st in task.sub_tasks}
 
-        # Launch all sub-tasks concurrently; each waits for its own dependencies
         coros = [
-            self._run_subtask(sub_task, task, agent_registry, memory, completed, events)
+            self._run_subtask(sub_task, task, agent_registry, memory, completed, failed, events)
             for sub_task in task.sub_tasks
         ]
         await asyncio.gather(*coros)
 
-        # Determine overall status
         if any(st.status == TaskStatus.FAILED for st in task.sub_tasks):
             task.status = TaskStatus.FAILED
         else:

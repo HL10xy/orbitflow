@@ -1,3 +1,4 @@
+import React from "react";
 import type { PipelineEvent } from "../types";
 
 const AGENT_META: Record<string, { icon: string; color: string; label: string }> = {
@@ -12,13 +13,12 @@ interface AgentCardProps {
   events: PipelineEvent[];
 }
 
-export function AgentCard({ role, events }: AgentCardProps) {
+export const AgentCard = React.memo(function AgentCard({ role, events }: AgentCardProps) {
   const meta = AGENT_META[role] ?? { icon: "?", color: "#6b7280", label: role };
-  const roleEvents = events.filter((e) => e.agent === role);
-  const lastEvent = roleEvents[roleEvents.length - 1];
+  const lastEvent = events[events.length - 1];
   const isActive = lastEvent?.event_type === "agent_start";
-  const hasCompleted = roleEvents.some((e) => e.event_type === "agent_end");
-  const hasFailed = roleEvents.some(
+  const hasCompleted = events.some((e) => e.event_type === "agent_end");
+  const hasFailed = events.some(
     (e) => e.event_type === "log" && e.message.toLowerCase().includes("failed")
   );
 
@@ -60,4 +60,4 @@ export function AgentCard({ role, events }: AgentCardProps) {
       </div>
     </div>
   );
-}
+});

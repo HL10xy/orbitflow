@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import json
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any
 
 from core.llm import LLMClient
@@ -52,41 +51,39 @@ Output complete test files that can be run directly.""",
 
 
 class BaseAgent(ABC):
-    """Abstract base for all specialized agents."""
+    """Base for all specialized agents."""
 
     role: str = "base"
     icon: str = "?"
+    context_hint: str = ""
 
     def __init__(self, llm: LLMClient | None = None):
         self.llm = llm or LLMClient()
         self.system_prompt = SYSTEM_PROMPTS.get(self.role, "You are a helpful AI assistant.")
 
-    @abstractmethod
     async def run(
         self,
         sub_task: SubTask,
         dependencies: dict[str, str],
         memory: Any,
     ) -> str:
-        """Execute the agent's logic on a sub-task.
-
-        Args:
-            sub_task: The sub-task to execute.
-            dependencies: Map of completed dependency sub-task IDs -> results.
-            memory: SharedMemory instance for inter-agent context.
-
-        Returns:
-            The agent's output as a string.
-        """
-        ...
+        """Execute the agent's logic on a sub-task."""
+        context = self._build_context(sub_task, dependencies, memory)
+        if self.context_hint:
+            context += f"\n\n{self.context_hint}"
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": context},
+        ]
+        result = await self._llm_call(messages)
+        memory.write(f"agent:{self.role}", result, sub_task_id=sub_task.id)
+        return result
 
     async def _llm_call(self, messages: list[dict[str, str]]) -> str:
-        """Convenience wrapper around LLM chat."""
         resp = await self.llm.chat(messages)
         return self.llm.extract_content(resp)
 
     def _build_context(self, sub_task: SubTask, dependencies: dict[str, str], memory: Any) -> str:
-        """Build a context string from dependency results and memory."""
         parts = [f"## Current Task\n{sub_task.description}\n"]
         if dependencies:
             parts.append("## Dependency Results\n")

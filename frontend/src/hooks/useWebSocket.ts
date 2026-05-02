@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState, useEffect } from "react";
+import { isPipelineEvent } from "../types";
 import type { PipelineEvent } from "../types";
 
 type WSCallback = (event: PipelineEvent) => void;
@@ -43,6 +44,7 @@ export function useWebSocket() {
     ws.onmessage = (msg) => {
       try {
         const data = JSON.parse(msg.data);
+        if (!isPipelineEvent(data)) return;
         if (data.event_type === "done") return;
         setEvents((prev) => {
           const next = [...prev, data];

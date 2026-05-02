@@ -13,11 +13,13 @@ class MemoryEntry:
 
 
 class SharedMemory:
-    """Thread-safe shared memory for inter-agent communication.
+    """Shared memory for inter-agent communication.
 
     All agents read from and write to the same memory space, enabling
     true multi-agent collaboration. The memory enforces a configurable
     max size and supports context-window-aware truncation.
+
+    Note: not thread-safe; safe for single-event-loop async use.
     """
 
     def __init__(self, max_entries: int = 200):
