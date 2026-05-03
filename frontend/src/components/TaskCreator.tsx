@@ -37,6 +37,7 @@ export function TaskCreator({ onRun, disabled, isRunning }: TaskCreatorProps) {
         type="text"
         className="input"
         placeholder="Task title (optional)"
+        aria-label="Task title"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
       />

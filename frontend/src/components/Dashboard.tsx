@@ -12,6 +12,7 @@ export function Dashboard() {
   const [status, setStatus] = useState<OrchestratorStatus | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
 
   const fetchStatus = useCallback(() => {
     fetch("/api/status")
@@ -28,7 +29,8 @@ export function Dashboard() {
       .catch((err) => {
         setStatusError("Failed to connect to server");
         console.warn("Failed to fetch status:", err);
-      });
+      })
+      .finally(() => setStatusLoading(false));
   }, []);
 
   useEffect(() => {
@@ -78,7 +80,8 @@ export function Dashboard() {
           <span className={`ws-indicator ${connected ? "connected" : "disconnected"}`} role="status">
             {connected ? "Connected" : "Disconnected"}
           </span>
-          {status && <span className="llm-info">Model: {status.llm}</span>}
+          {statusLoading && <span className="llm-info">Loading...</span>}
+          {!statusLoading && status && <span className="llm-info">Model: {status.llm}</span>}
         </div>
       </header>
 

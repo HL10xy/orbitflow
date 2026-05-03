@@ -57,7 +57,6 @@ class Pipeline:
                     listener(event)
             except Exception:
                 logger.exception("Listener error during event emission")
-                raise
 
     async def _run_subtask(
         self,

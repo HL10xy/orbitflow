@@ -38,6 +38,12 @@ class LLMClient:
     async def close(self):
         await self._client.aclose()
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        await self.close()
+
     @property
     def _headers(self) -> dict[str, str]:
         return {

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { isAgentRole } from "../types";
 import type { AgentRole, PipelineEvent } from "../types";
 
 interface TaskFlowProps {
@@ -16,11 +17,10 @@ export function TaskFlow({ events }: TaskFlowProps) {
       tester: "idle",
     };
     for (const e of events) {
-      const agent = e.agent as AgentRole;
-      if (!(agent in statuses)) continue;
-      if (e.event_type === "agent_start") statuses[agent] = "working";
-      else if (e.event_type === "agent_end") statuses[agent] = "done";
-      else if (e.event_type === "agent_failed") statuses[agent] = "failed";
+      if (!isAgentRole(e.agent)) continue;
+      if (e.event_type === "agent_start") statuses[e.agent] = "working";
+      else if (e.event_type === "agent_end") statuses[e.agent] = "done";
+      else if (e.event_type === "agent_failed") statuses[e.agent] = "failed";
     }
     return statuses;
   }, [events]);

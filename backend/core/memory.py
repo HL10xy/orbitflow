@@ -64,12 +64,11 @@ class SharedMemory:
             system_prompt: Optional system prompt to prepend.
             max_chars: Approximate character budget to avoid exceeding context window.
         """
-        messages: list[dict[str, str]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+        entries = list(self._entries.values())
+        result: list[dict[str, str]] = []
         total_chars = len(system_prompt)
-        # Iterate newest-first so we keep the most recent entries when budget runs out
-        for entry in reversed(list(self._entries.values())):
+        # Walk backwards to keep newest entries when budget runs out
+        for entry in reversed(entries):
             if entry.role == "system":
                 msg = {"role": "system", "content": entry.content}
             elif entry.role.startswith("agent:"):
@@ -80,9 +79,13 @@ class SharedMemory:
             entry_len = len(msg["content"])
             if total_chars + entry_len > max_chars:
                 break
-            messages.append(msg)
+            result.append(msg)
             total_chars += entry_len
-        messages.reverse()  # restore chronological order
+        result.reverse()
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.extend(result)
         return messages
 
     def snapshot(self) -> dict[str, Any]:

@@ -54,6 +54,17 @@ export interface OrchestratorStatus {
   llm: string;
 }
 
+function isTask(data: unknown): data is Task {
+  if (typeof data !== "object" || data === null) return false;
+  const obj = data as Record<string, unknown>;
+  return (
+    typeof obj.id === "string" &&
+    typeof obj.title === "string" &&
+    typeof obj.status === "string" &&
+    Array.isArray(obj.sub_tasks)
+  );
+}
+
 export function isOrchestratorStatus(data: unknown): data is OrchestratorStatus {
   if (typeof data !== "object" || data === null) return false;
   const obj = data as Record<string, unknown>;
@@ -61,11 +72,14 @@ export function isOrchestratorStatus(data: unknown): data is OrchestratorStatus 
   if (typeof obj.memory !== "object" || obj.memory === null) return false;
   const mem = obj.memory as Record<string, unknown>;
   if (typeof mem.total_entries !== "number" || !Array.isArray(mem.entries)) return false;
-  if (obj.current_task !== null && typeof obj.current_task !== "object") return false;
+  if (obj.current_task !== null && !isTask(obj.current_task)) return false;
   return true;
 }
 
 export type Complexity = "simple" | "moderate" | "complex" | "epic";
 export type AgentRole = "architect" | "coder" | "reviewer" | "tester";
-export type TaskStatus = "pending" | "in_progress" | "completed" | "failed";
-export type EventType = "task_start" | "task_end" | "agent_start" | "agent_end" | "agent_failed" | "log";
+
+const AGENT_ROLE_SET = new Set<string>(["architect", "coder", "reviewer", "tester"]);
+export function isAgentRole(value: string): value is AgentRole {
+  return AGENT_ROLE_SET.has(value);
+}

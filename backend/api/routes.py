@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import ipaddress
 import json
+import logging
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from typing import Any
 from urllib.parse import urlparse
@@ -12,10 +15,13 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, HTTPExcepti
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from agents.base import _sanitize_input
 from agents.orchestrator import Orchestrator
 from config import default_config as cfg
 from core.llm import LLMClient
 from core.task import TaskComplexity
+
+logger = logging.getLogger(__name__)
 
 _orchestrator = Orchestrator()
 _orch_lock = asyncio.Lock()
@@ -26,14 +32,19 @@ def _validate_base_url(url: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme not in ("https", "http"):
         raise ValueError("base_url must use http or https scheme")
-    hostname = parsed.hostname or ""
-    # Block private/link-local addresses
-    if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+    hostname = (parsed.hostname or "").strip("[]")
+    # Try to parse as IP address
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise ValueError("base_url cannot point to private/loopback/link-local addresses")
         return url
-    if hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
-        raise ValueError("base_url cannot point to private network addresses")
-    if hostname.startswith("169.254."):
-        raise ValueError("base_url cannot point to link-local addresses")
+    except ValueError as exc:
+        if "cannot point to" in str(exc):
+            raise
+    # Hostname is a domain — block known loopback aliases
+    if hostname in ("localhost",):
+        raise ValueError("base_url cannot point to localhost")
     return url
 
 
@@ -132,23 +143,33 @@ async def configure_llm(req: LLMConfigRequest, x_api_key: str | None = Header(No
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     """WebSocket endpoint for real-time agent collaboration streaming."""
-    if cfg.api_key:
-        token = ws.query_params.get("token")
-        if not (token and hmac.compare_digest(token, cfg.api_key)):
+    await ws.accept()
+
+    # Authenticate via first message if API key is configured
+    authenticated = not cfg.api_key
+    if not authenticated:
+        try:
+            first_msg = await asyncio.wait_for(ws.receive_text(), timeout=10)
+            data = json.loads(first_msg)
+            token = data.get("token", "") if isinstance(data, dict) else ""
+            if not (token and hmac.compare_digest(token, cfg.api_key)):
+                await ws.send_json({"event_type": "error", "message": "Unauthorized"})
+                await ws.close(code=4001, reason="Unauthorized")
+                return
+            authenticated = True
+        except (json.JSONDecodeError, asyncio.TimeoutError):
+            await ws.send_json({"event_type": "error", "message": "Expected auth message as first frame"})
             await ws.close(code=4001, reason="Unauthorized")
             return
 
-    await ws.accept()
-
     # Rate limiting state
-    msg_timestamps: list[float] = []
+    msg_timestamps: deque[float] = deque()
     rate_limit = cfg.ws_rate_limit
 
     def _check_rate_limit():
         now = time.monotonic()
-        # Remove timestamps older than 1 second
         while msg_timestamps and now - msg_timestamps[0] > 1.0:
-            msg_timestamps.pop(0)
+            msg_timestamps.popleft()
         if len(msg_timestamps) >= rate_limit:
             return False
         msg_timestamps.append(now)
@@ -189,15 +210,16 @@ async def websocket_endpoint(ws: WebSocket):
                 orch = Orchestrator()
                 try:
                     async for event in orch.run(
-                        description,
-                        title=msg.get("title", ""),
+                        _sanitize_input(description),
+                        title=_sanitize_input(msg.get("title", ""), 200),
                         complexity=complexity,
                         stream=True,
                     ):
                         await ws.send_json(event.to_dict())
                     await ws.send_json({"event_type": "done"})
                 except Exception as exc:
-                    await ws.send_json({"event_type": "error", "message": str(exc)})
+                    logger.exception("WS run action failed")
+                    await ws.send_json({"event_type": "error", "message": "Internal error during task execution"})
                 finally:
                     await orch.close()
 

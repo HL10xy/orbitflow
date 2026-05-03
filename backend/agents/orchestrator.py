@@ -44,6 +44,7 @@ class Orchestrator:
         self.pipeline = Pipeline()
         self.current_task: Task | None = None
         self._running = False
+        self._run_lock = asyncio.Lock()
 
     async def close(self):
         await self.llm.close()
@@ -69,9 +70,10 @@ class Orchestrator:
         Yields:
             PipelineEvent objects for real-time monitoring.
         """
-        if self._running:
-            raise RuntimeError("Orchestrator is already running a task")
-        self._running = True
+        async with self._run_lock:
+            if self._running:
+                raise RuntimeError("Orchestrator is already running a task")
+            self._running = True
 
         task = Task(
             title=title or description[:80],
@@ -121,9 +123,10 @@ class Orchestrator:
 
     async def run_sync(self, description: str, **kwargs) -> Task:
         """Run a task and return the completed Task (non-streaming)."""
-        if self._running:
-            raise RuntimeError("Orchestrator is already running a task")
-        self._running = True
+        async with self._run_lock:
+            if self._running:
+                raise RuntimeError("Orchestrator is already running a task")
+            self._running = True
 
         task = Task(
             title=kwargs.get("title", description[:80]),

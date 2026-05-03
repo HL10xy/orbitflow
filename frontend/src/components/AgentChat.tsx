@@ -49,8 +49,8 @@ export function AgentChat({ events }: AgentChatProps) {
             Show latest {VISIBLE_LIMIT} only
           </button>
         )}
-        {visibleEvents.map((e, i) => (
-          <div key={`${e.timestamp}-${e.agent}-${e.sub_task_id}-${i}`} className={`chat-entry chat-${e.event_type}`}>
+        {visibleEvents.map((e) => (
+          <div key={`${e.timestamp}-${e.agent}-${e.sub_task_id}`} className={`chat-entry chat-${e.event_type}`}>
             <span className="chat-time">
               {new Date(e.timestamp * 1000).toLocaleTimeString()}
             </span>
