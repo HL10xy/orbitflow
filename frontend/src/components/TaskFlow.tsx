@@ -1,25 +1,29 @@
-import type { PipelineEvent } from "../types";
+import { useMemo } from "react";
+import type { AgentRole, PipelineEvent } from "../types";
 
 interface TaskFlowProps {
   events: PipelineEvent[];
 }
 
-const AGENT_ORDER = ["architect", "coder", "reviewer", "tester"];
+const AGENT_ORDER: AgentRole[] = ["architect", "coder", "reviewer", "tester"];
 
 export function TaskFlow({ events }: TaskFlowProps) {
-  const agentStatuses: Record<string, "idle" | "working" | "done" | "failed"> = {
-    architect: "idle",
-    coder: "idle",
-    reviewer: "idle",
-    tester: "idle",
-  };
-
-  for (const e of events) {
-    if (e.event_type === "agent_start") agentStatuses[e.agent] = "working";
-    else if (e.event_type === "agent_end") agentStatuses[e.agent] = "done";
-    else if (e.event_type === "log" && e.message.toLowerCase().includes("failed"))
-      agentStatuses[e.agent] = "failed";
-  }
+  const agentStatuses = useMemo(() => {
+    const statuses: Record<AgentRole, "idle" | "working" | "done" | "failed"> = {
+      architect: "idle",
+      coder: "idle",
+      reviewer: "idle",
+      tester: "idle",
+    };
+    for (const e of events) {
+      const agent = e.agent as AgentRole;
+      if (!(agent in statuses)) continue;
+      if (e.event_type === "agent_start") statuses[agent] = "working";
+      else if (e.event_type === "agent_end") statuses[agent] = "done";
+      else if (e.event_type === "agent_failed") statuses[agent] = "failed";
+    }
+    return statuses;
+  }, [events]);
 
   return (
     <div className="task-flow">

@@ -1,7 +1,7 @@
 import React from "react";
-import type { PipelineEvent } from "../types";
+import type { AgentRole, PipelineEvent } from "../types";
 
-const AGENT_META: Record<string, { icon: string; color: string; label: string }> = {
+const AGENT_META: Record<AgentRole, { icon: string; color: string; label: string }> = {
   architect: { icon: "🏗️", color: "#f59e0b", label: "Architect" },
   coder: { icon: "💻", color: "#3b82f6", label: "Coder" },
   reviewer: { icon: "🔍", color: "#8b5cf6", label: "Reviewer" },
@@ -9,31 +9,30 @@ const AGENT_META: Record<string, { icon: string; color: string; label: string }>
 };
 
 interface AgentCardProps {
-  role: string;
+  role: AgentRole;
   events: PipelineEvent[];
 }
 
 export const AgentCard = React.memo(function AgentCard({ role, events }: AgentCardProps) {
   const meta = AGENT_META[role] ?? { icon: "?", color: "#6b7280", label: role };
   const lastEvent = events[events.length - 1];
-  const isActive = lastEvent?.event_type === "agent_start";
-  const hasCompleted = events.some((e) => e.event_type === "agent_end");
-  const hasFailed = events.some(
-    (e) => e.event_type === "log" && e.message.toLowerCase().includes("failed")
-  );
 
   let statusColor = "#6b7280";
   let statusText = "IDLE";
-  if (hasFailed) {
-    statusColor = "#ef4444";
-    statusText = "FAILED";
-  } else if (hasCompleted) {
-    statusColor = "#10b981";
-    statusText = "DONE";
-  } else if (isActive) {
-    statusColor = "#f59e0b";
-    statusText = "WORKING";
+  if (lastEvent) {
+    if (lastEvent.event_type === "agent_failed") {
+      statusColor = "#ef4444";
+      statusText = "FAILED";
+    } else if (lastEvent.event_type === "agent_end") {
+      statusColor = "#10b981";
+      statusText = "DONE";
+    } else if (lastEvent.event_type === "agent_start") {
+      statusColor = "#f59e0b";
+      statusText = "WORKING";
+    }
   }
+
+  const isActive = statusText === "WORKING";
 
   return (
     <div

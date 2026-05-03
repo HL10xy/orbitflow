@@ -8,9 +8,15 @@ export interface PipelineEvent {
 }
 
 export function isPipelineEvent(data: unknown): data is PipelineEvent {
+  if (typeof data !== "object" || data === null) return false;
+  const obj = data as Record<string, unknown>;
   return (
-    typeof data === "object" && data !== null &&
-    "event_type" in data && typeof (data as any).event_type === "string"
+    typeof obj.event_type === "string" &&
+    typeof obj.task_id === "string" &&
+    typeof obj.sub_task_id === "string" &&
+    typeof obj.agent === "string" &&
+    typeof obj.message === "string" &&
+    typeof obj.timestamp === "number"
   );
 }
 
@@ -49,12 +55,17 @@ export interface OrchestratorStatus {
 }
 
 export function isOrchestratorStatus(data: unknown): data is OrchestratorStatus {
-  return (
-    typeof data === "object" && data !== null &&
-    "agents" in data && Array.isArray((data as any).agents) &&
-    "memory" in data &&
-    "llm" in data
-  );
+  if (typeof data !== "object" || data === null) return false;
+  const obj = data as Record<string, unknown>;
+  if (!Array.isArray(obj.agents) || typeof obj.llm !== "string") return false;
+  if (typeof obj.memory !== "object" || obj.memory === null) return false;
+  const mem = obj.memory as Record<string, unknown>;
+  if (typeof mem.total_entries !== "number" || !Array.isArray(mem.entries)) return false;
+  if (obj.current_task !== null && typeof obj.current_task !== "object") return false;
+  return true;
 }
 
 export type Complexity = "simple" | "moderate" | "complex" | "epic";
+export type AgentRole = "architect" | "coder" | "reviewer" | "tester";
+export type TaskStatus = "pending" | "in_progress" | "completed" | "failed";
+export type EventType = "task_start" | "task_end" | "agent_start" | "agent_end" | "agent_failed" | "log";

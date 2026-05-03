@@ -27,8 +27,8 @@ class LLMClient:
         self.model = model or cfg.llm_model
         self.max_tokens = max_tokens or cfg.agent_max_tokens
 
-        if self.api_key == "your-api-key-here":
-            logger.warning("LLM_API_KEY is set to the default placeholder; LLM calls will fail")
+        if not self.api_key:
+            logger.warning("LLM_API_KEY is not set; LLM calls will fail with auth errors")
 
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(120, read=300),
@@ -71,13 +71,14 @@ class LLMClient:
         for attempt in range(max_retries):
             try:
                 return await make_request()
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code in (429, 500, 502, 503) and attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
-                    continue
-                raise
-            except httpx.TransportError:
-                if attempt < max_retries - 1:
+            except (httpx.HTTPStatusError, httpx.TransportError, json.JSONDecodeError) as exc:
+                is_retryable = False
+                if isinstance(exc, httpx.HTTPStatusError):
+                    is_retryable = exc.response.status_code in (429, 500, 502, 503)
+                elif isinstance(exc, (httpx.TransportError, json.JSONDecodeError)):
+                    is_retryable = True
+
+                if is_retryable and attempt < max_retries - 1:
                     await asyncio.sleep(2 ** attempt)
                     continue
                 raise
@@ -109,23 +110,45 @@ class LLMClient:
         *,
         temperature: float = 0.7,
     ) -> AsyncIterator[str]:
-        """Stream chat completion tokens."""
+        """Stream chat completion tokens.
+
+        Retries only the initial connection. Once streaming begins,
+        individual malformed SSE lines are skipped without aborting.
+        """
         payload = self._build_payload(messages, stream=True, temperature=temperature)
 
-        async def do_request():
-            resp = await self._client.send(
-                self._client.build_request(
-                    "POST",
-                    f"{self.base_url}/chat/completions",
-                    headers=self._headers,
-                    json=payload,
-                ),
-                stream=True,
-            )
-            resp.raise_for_status()
-            return resp
+        # Retry the connection establishment, not the stream consumption
+        resp: httpx.Response | None = None
+        for attempt in range(3):
+            try:
+                resp = await self._client.send(
+                    self._client.build_request(
+                        "POST",
+                        f"{self.base_url}/chat/completions",
+                        headers=self._headers,
+                        json=payload,
+                    ),
+                    stream=True,
+                )
+                resp.raise_for_status()
+                break
+            except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+                is_retryable = False
+                if isinstance(exc, httpx.HTTPStatusError):
+                    is_retryable = exc.response.status_code in (429, 500, 502, 503)
+                    # Close the failed response to avoid leaking connections
+                    await exc.response.aclose()
+                else:
+                    is_retryable = True
 
-        resp = await self._request_with_retry(do_request)
+                if is_retryable and attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                raise
+
+        if resp is None:
+            raise RuntimeError("Failed to establish streaming connection")
+
         async with resp:
             async for line in resp.aiter_lines():
                 if line.startswith("data: ") and line != "data: [DONE]":

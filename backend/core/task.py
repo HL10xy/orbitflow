@@ -25,7 +25,7 @@ class TaskComplexity(str, Enum):
 
 @dataclass
 class SubTask:
-    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     description: str = ""
     assigned_agent: str = ""  # agent role name
     status: TaskStatus = TaskStatus.PENDING
@@ -48,7 +48,7 @@ class SubTask:
 class Task:
     """A software engineering task decomposed into sub-tasks for multi-agent execution."""
 
-    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     title: str = ""
     description: str = ""
     complexity: TaskComplexity = TaskComplexity.MODERATE

@@ -50,6 +50,16 @@ Output complete test files that can be run directly.""",
 }
 
 
+MAX_DESCRIPTION_LENGTH = 10_000
+
+
+def _sanitize_input(text: str, max_length: int = MAX_DESCRIPTION_LENGTH) -> str:
+    """Truncate and strip control characters to mitigate prompt injection."""
+    text = text[:max_length]
+    # Strip control characters except newlines/tabs
+    return "".join(ch for ch in text if ch in ("\n", "\t") or (ord(ch) >= 32))
+
+
 class BaseAgent(ABC):
     """Base for all specialized agents."""
 
@@ -84,12 +94,12 @@ class BaseAgent(ABC):
         return self.llm.extract_content(resp)
 
     def _build_context(self, sub_task: SubTask, dependencies: dict[str, str], memory: Any) -> str:
-        parts = [f"## Current Task\n{sub_task.description}\n"]
+        parts = [f"## Current Task\n{_sanitize_input(sub_task.description)}\n"]
         if dependencies:
             parts.append("## Dependency Results\n")
             for dep_id, dep_result in dependencies.items():
-                parts.append(f"### Input from {dep_id}\n{dep_result}\n")
-        recent = memory.read_all()[-10:]
+                parts.append(f"### Input from {dep_id}\n{_sanitize_input(dep_result)}\n")
+        recent = memory.read_recent(10)
         if recent:
             parts.append("## Recent Agent Communications\n")
             for entry in recent:

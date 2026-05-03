@@ -53,8 +53,6 @@ export function TaskCreator({ onRun, disabled, isRunning }: TaskCreatorProps) {
           <label
             key={opt.value}
             className={`complexity-option ${complexity === opt.value ? "selected" : ""}`}
-            role="radio"
-            aria-checked={complexity === opt.value}
           >
             <input
               type="radio"

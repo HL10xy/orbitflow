@@ -1,6 +1,6 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { isPipelineEvent } from "../types";
-import type { PipelineEvent } from "../types";
+import type { Complexity, PipelineEvent } from "../types";
 
 type WSCallback = (event: PipelineEvent) => void;
 
@@ -93,7 +93,7 @@ export function useWebSocket() {
   }, []);
 
   const runTask = useCallback(
-    (description: string, complexity: string, title = "") => {
+    (description: string, complexity: Complexity, title = "") => {
       setEvents([]);
       send({ action: "run", description, complexity, title });
     },

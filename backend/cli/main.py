@@ -53,17 +53,20 @@ def run(description: str, complexity: str, title: str):
     ))
 
     async def _run():
-        async for event in orch.run(description, complexity=compl, title=title):
-            if event.event_type == "agent_start":
-                agent_obj = orch.agents.get(event.agent)
-                icon_str = agent_obj.icon if agent_obj else "?"
-                console.print(f"  {icon_str} [bold yellow]{event.agent}[/] starting: {event.message[:100]}")
-            elif event.event_type == "agent_end":
-                console.print(f"  ✅ [bold green]{event.agent}[/] completed")
-            elif event.event_type == "task_end":
-                console.print(f"\n[bold green]✓ Task completed:[/] {event.message}")
-            elif event.event_type == "log" and "failed" in event.message.lower():
-                console.print(f"  ❌ [bold red]{event.agent}[/] {event.message[:120]}")
+        try:
+            async for event in orch.run(description, complexity=compl, title=title):
+                if event.event_type == "agent_start":
+                    agent_obj = orch.agents.get(event.agent)
+                    icon_str = agent_obj.icon if agent_obj else "?"
+                    console.print(f"  {icon_str} [bold yellow]{event.agent}[/] starting: {event.message[:100]}")
+                elif event.event_type == "agent_end":
+                    console.print(f"  ✅ [bold green]{event.agent}[/] completed")
+                elif event.event_type == "task_end":
+                    console.print(f"\n[bold green]✓ Task completed:[/] {event.message}")
+                elif event.event_type == "agent_failed":
+                    console.print(f"  ❌ [bold red]{event.agent}[/] {event.message[:120]}")
+        finally:
+            await orch.close()
 
     asyncio.run(_run())
 
@@ -90,6 +93,10 @@ def serve():
 def status():
     """Show current orchestrator status."""
     orch = Orchestrator()
+
+    async def _close():
+        await orch.close()
+
     info = orch.get_status()
 
     console.print(Panel("[bold blue]OrbitFlow Status[/]"))
@@ -107,6 +114,8 @@ def status():
         for st in t["sub_tasks"]:
             table.add_row(st["assigned_agent"], st["description"][:60], st["status"])
         console.print(table)
+
+    asyncio.run(_close())
 
 
 if __name__ == "__main__":

@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from core.task import Task, TaskStatus, SubTask
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class PipelineEvent:
     """Emitted during pipeline execution for real-time monitoring."""
 
-    event_type: str  # "task_start" | "task_end" | "agent_start" | "agent_end" | "log"
+    event_type: str  # "task_start" | "task_end" | "agent_start" | "agent_end" | "agent_failed" | "log"
     task_id: str = ""
     sub_task_id: str = ""
     agent: str = ""
@@ -47,10 +50,14 @@ class Pipeline:
 
     async def _emit(self, event: PipelineEvent):
         for listener in self._listeners:
-            if asyncio.iscoroutinefunction(listener):
-                await listener(event)
-            else:
-                listener(event)
+            try:
+                if asyncio.iscoroutinefunction(listener):
+                    await listener(event)
+                else:
+                    listener(event)
+            except Exception:
+                logger.exception("Listener error during event emission")
+                raise
 
     async def _run_subtask(
         self,
@@ -63,12 +70,10 @@ class Pipeline:
         events: dict[str, asyncio.Event],
     ) -> None:
         """Execute a single sub-task after its dependencies are met."""
-        # Wait for all dependencies
         for dep_id in sub_task.dependencies:
             if dep_id in events:
                 await events[dep_id].wait()
 
-        # Skip if any dependency failed
         failed_deps = [dep_id for dep_id in sub_task.dependencies if dep_id in failed]
         if failed_deps:
             sub_task.status = TaskStatus.FAILED
@@ -117,11 +122,12 @@ class Pipeline:
                 message=f"Agent '{sub_task.assigned_agent}' completed",
             ))
         except Exception as exc:
+            logger.exception("Agent '%s' failed on sub-task %s", sub_task.assigned_agent, sub_task.id)
             sub_task.result = str(exc)
             sub_task.status = TaskStatus.FAILED
             failed.add(sub_task.id)
             await self._emit(PipelineEvent(
-                event_type="log",
+                event_type="agent_failed",
                 task_id=task.id,
                 sub_task_id=sub_task.id,
                 agent=sub_task.assigned_agent,
@@ -159,11 +165,12 @@ class Pipeline:
 
         if any(st.status == TaskStatus.FAILED for st in task.sub_tasks):
             task.status = TaskStatus.FAILED
+            msg = f"Task failed: {task.title}"
         else:
             task.status = TaskStatus.COMPLETED
+            msg = f"Task completed: {task.title}"
 
         await self._emit(PipelineEvent(
-            event_type="task_end", task_id=task.id,
-            message=f"Task completed: {task.title}",
+            event_type="task_end", task_id=task.id, message=msg,
         ))
         return task

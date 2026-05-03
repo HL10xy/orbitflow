@@ -393,6 +393,26 @@
   color: var(--success);
 }
 
+.chat-agent_failed .chat-msg {
+  color: var(--danger);
+}
+
+.chat-agent_failed .chat-agent {
+  color: var(--danger);
+}
+
+/* ============= Status Error Banner ============= */
+
+.status-error-banner {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+  padding: 8px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
 /* ============= Scrollbar ============= */
 
 .chat-log::-webkit-scrollbar {
@@ -407,6 +427,18 @@
 .chat-log::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
+}
+
+/* ============= Focus Visible ============= */
+
+.btn-run:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.complexity-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ============= Responsive ============= */

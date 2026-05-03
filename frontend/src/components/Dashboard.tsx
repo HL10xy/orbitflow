@@ -11,6 +11,7 @@ export function Dashboard() {
   const { connected, events, connect, disconnect, runTask } = useWebSocket();
   const [status, setStatus] = useState<OrchestratorStatus | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const fetchStatus = useCallback(() => {
     fetch("/api/status")
@@ -19,9 +20,13 @@ export function Dashboard() {
         return r.json();
       })
       .then((data) => {
-        if (isOrchestratorStatus(data)) setStatus(data);
+        if (isOrchestratorStatus(data)) {
+          setStatus(data);
+          setStatusError(null);
+        }
       })
       .catch((err) => {
+        setStatusError("Failed to connect to server");
         console.warn("Failed to fetch status:", err);
       });
   }, []);
@@ -36,12 +41,16 @@ export function Dashboard() {
     };
   }, [connect, disconnect, fetchStatus]);
 
-  // Track running state from events
+  // Track running state from events; reset on disconnect
   useEffect(() => {
+    if (!connected) {
+      setIsRunning(false);
+      return;
+    }
     const hasStart = events.some((e) => e.event_type === "task_start");
     const hasEnd = events.some((e) => e.event_type === "task_end");
     setIsRunning(hasStart && !hasEnd);
-  }, [events]);
+  }, [events, connected]);
 
   const handleRun = useCallback(
     (description: string, complexity: Complexity, title: string) => {
@@ -50,23 +59,14 @@ export function Dashboard() {
     [runTask]
   );
 
-  // Memoize per-agent event subsets to avoid re-filtering on every render
-  const architectEvents = useMemo(
-    () => events.filter((e) => e.agent === "architect"),
-    [events]
-  );
-  const coderEvents = useMemo(
-    () => events.filter((e) => e.agent === "coder"),
-    [events]
-  );
-  const reviewerEvents = useMemo(
-    () => events.filter((e) => e.agent === "reviewer"),
-    [events]
-  );
-  const testerEvents = useMemo(
-    () => events.filter((e) => e.agent === "tester"),
-    [events]
-  );
+  // Single-pass bucket: partition events by agent in one traversal
+  const eventsByAgent = useMemo(() => {
+    const buckets: Record<string, typeof events> = { architect: [], coder: [], reviewer: [], tester: [] };
+    for (const e of events) {
+      if (e.agent in buckets) buckets[e.agent].push(e);
+    }
+    return buckets;
+  }, [events]);
 
   return (
     <div className="dashboard">
@@ -75,12 +75,18 @@ export function Dashboard() {
           <span className="logo-icon">🚀</span> OrbitFlow
         </h1>
         <div className="header-info">
-          <span className={`ws-indicator ${connected ? "connected" : "disconnected"}`}>
+          <span className={`ws-indicator ${connected ? "connected" : "disconnected"}`} role="status">
             {connected ? "Connected" : "Disconnected"}
           </span>
           {status && <span className="llm-info">Model: {status.llm}</span>}
         </div>
       </header>
+
+      {statusError && (
+        <div className="status-error-banner" role="alert">
+          {statusError}
+        </div>
+      )}
 
       <div className="dashboard-grid">
         <aside className="sidebar">
@@ -88,10 +94,10 @@ export function Dashboard() {
 
           <div className="agent-cards">
             <h3>Agents</h3>
-            <AgentCard role="architect" events={architectEvents} />
-            <AgentCard role="coder" events={coderEvents} />
-            <AgentCard role="reviewer" events={reviewerEvents} />
-            <AgentCard role="tester" events={testerEvents} />
+            <AgentCard role="architect" events={eventsByAgent.architect} />
+            <AgentCard role="coder" events={eventsByAgent.coder} />
+            <AgentCard role="reviewer" events={eventsByAgent.reviewer} />
+            <AgentCard role="tester" events={eventsByAgent.tester} />
           </div>
         </aside>
 

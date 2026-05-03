@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, AsyncIterator
 
 from agents.architect import ArchitectAgent
@@ -12,6 +13,8 @@ from core.llm import LLMClient
 from core.memory import SharedMemory
 from core.pipeline import Pipeline, PipelineEvent
 from core.task import Task, TaskComplexity, TaskStatus
+
+logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
@@ -110,7 +113,10 @@ class Orchestrator:
             self.current_task = task
         finally:
             self.pipeline.remove_listener(collect)
-            sentinel_task.cancel()
+            if not pipeline_task.done():
+                pipeline_task.cancel()
+            if not sentinel_task.done():
+                sentinel_task.cancel()
             self._running = False
 
     async def run_sync(self, description: str, **kwargs) -> Task:
@@ -127,16 +133,11 @@ class Orchestrator:
         task.sub_tasks = Task.decompose_plan(description, task.complexity)
         self.current_task = task
 
-        events_list: list[PipelineEvent] = []
-
-        def collect(event: PipelineEvent):
-            events_list.append(event)
-
-        self.pipeline.on_event(collect)
+        self.pipeline.clear_listeners()
         try:
             return await self.pipeline.execute(task, self.agents, self.memory)
         finally:
-            self.pipeline.remove_listener(collect)
+            self.pipeline.clear_listeners()
             self._running = False
 
     def get_status(self) -> dict[str, Any]:

@@ -42,29 +42,47 @@ class SharedMemory:
     def read_all(self) -> list[MemoryEntry]:
         return list(self._entries.values())
 
+    def read_recent(self, n: int = 10) -> list[MemoryEntry]:
+        """Return the last *n* entries in chronological order."""
+        from itertools import islice
+        return list(islice(self._entries.values(), max(0, len(self._entries) - n), None))
+
     def read_by_role(self, role: str) -> list[MemoryEntry]:
         return [e for e in self._entries.values() if e.role == role]
 
-    def to_messages(self, system_prompt: str = "") -> list[dict[str, str]]:
+    def to_messages(
+        self,
+        system_prompt: str = "",
+        max_chars: int = 80_000,
+    ) -> list[dict[str, str]]:
         """Convert memory entries to LLM-compatible messages.
 
         Agent entries become 'assistant' messages, tool entries become
         'user' messages, preserving the conversation flow.
+
+        Args:
+            system_prompt: Optional system prompt to prepend.
+            max_chars: Approximate character budget to avoid exceeding context window.
         """
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        for entry in self._entries.values():
+        total_chars = len(system_prompt)
+        # Iterate newest-first so we keep the most recent entries when budget runs out
+        for entry in reversed(list(self._entries.values())):
             if entry.role == "system":
-                messages.append({"role": "system", "content": entry.content})
+                msg = {"role": "system", "content": entry.content}
             elif entry.role.startswith("agent:"):
                 agent_name = entry.role.split(":", 1)[1]
-                messages.append({
-                    "role": "assistant",
-                    "content": f"[{agent_name}]: {entry.content}",
-                })
+                msg = {"role": "assistant", "content": f"[{agent_name}]: {entry.content}"}
             else:
-                messages.append({"role": "user", "content": entry.content})
+                msg = {"role": "user", "content": entry.content}
+            entry_len = len(msg["content"])
+            if total_chars + entry_len > max_chars:
+                break
+            messages.append(msg)
+            total_chars += entry_len
+        messages.reverse()  # restore chronological order
         return messages
 
     def snapshot(self) -> dict[str, Any]:
